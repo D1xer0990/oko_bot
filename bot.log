@@ -1,0 +1,108 @@
+2025-10-04 22:40:20,193 - INFO - Bot: Oko [@Oko1777_bot]
+2025-10-04 22:40:20,351 - WARNING - Updates were skipped successfully.
+2025-10-04 22:40:20,352 - INFO - Start polling.
+2025-10-04 22:40:49,745 - INFO - USER: 828609939 (DEGONF0990) | ACTION: START_COMMAND | DETAILS: Попытка входа без авторизации
+2025-10-04 22:41:07,258 - INFO - USER: 828609939 (DEGONF0990) | ACTION: AUTH_SUCCESS | DETAILS: Успешная авторизация с кодом: 12345
+2025-10-04 22:42:32,526 - INFO - USER: 828609939 (DEGONF0990) | ACTION: LOGS_COMMAND | DETAILS: Просмотр логов
+2025-10-04 22:46:10,459 - INFO - USER: 828609939 (DEGONF0990) | ACTION: LOGS_COMMAND | DETAILS: Просмотр логов
+2025-10-04 22:46:26,655 - INFO - USER: 828609939 (DEGONF0990) | ACTION: START_COMMAND | DETAILS: Успешный вход в бот
+2025-10-04 22:46:40,958 - INFO - USER: 828609939 (DEGONF0990) | ACTION: START_COMMAND | DETAILS: Успешный вход в бот
+2025-10-04 22:48:34,956 - INFO - USER: 828609939 (DEGONF0990) | ACTION: LOGS_COMMAND | DETAILS: Просмотр логов
+2025-10-04 22:57:16,683 - INFO - Stop polling...
+2025-10-04 22:57:16,683 - WARNING - Goodbye!
+2025-10-04 22:57:19,790 - INFO - Bot: Oko [@Oko1777_bot]
+2025-10-04 22:57:19,929 - WARNING - Updates were skipped successfully.
+2025-10-04 22:57:19,929 - INFO - Start polling.
+2025-10-04 22:57:34,579 - INFO - USER: 828609939 (DEGONF0990) | ACTION: START_COMMAND | DETAILS: Попытка входа без авторизации
+2025-10-04 22:57:44,169 - INFO - USER: 828609939 (DEGONF0990) | ACTION: AUTH_FAILED | DETAILS: Неверный код: 123
+2025-10-04 22:57:52,761 - INFO - USER: 828609939 (DEGONF0990) | ACTION: AUTH_SUCCESS | DETAILS: Успешная авторизация с кодом: 12345
+2025-10-04 22:58:30,896 - INFO - USER: 828609939 (DEGONF0990) | ACTION: LOGS_COMMAND | DETAILS: Просмотр логов неудачных авторизаций
+2025-10-04 23:05:09,187 - INFO - Stop polling...
+2025-10-04 23:05:09,187 - WARNING - Goodbye!
+2025-10-04 23:05:12,716 - INFO - Bot: Oko [@Oko1777_bot]
+2025-10-04 23:05:12,853 - WARNING - Updates were skipped successfully.
+2025-10-04 23:05:12,853 - INFO - Start polling.
+2025-10-04 23:05:22,874 - INFO - USER: 828609939 (DEGONF0990) | ACTION: START_COMMAND | DETAILS: Попытка входа без авторизации
+2025-10-04 23:05:28,714 - INFO - USER: 828609939 (DEGONF0990) | ACTION: AUTH_SUCCESS | DETAILS: Успешная авторизация пользователя с кодом: 12345
+2025-10-04 23:05:46,930 - INFO - USER: 828609939 (DEGONF0990) | ACTION: START_COMMAND | DETAILS: Вход обычного пользователя
+2025-10-04 23:05:58,000 - INFO - USER: 828609939 (DEGONF0990) | ACTION: START_COMMAND | DETAILS: Вход обычного пользователя
+2025-10-04 23:06:05,699 - INFO - USER: 828609939 (DEGONF0990) | ACTION: TEXT_SEARCH_NO_RESULTS | DETAILS: Ничего не найдено по запросу: 77777
+2025-10-04 23:06:21,680 - INFO - USER: 828609939 (DEGONF0990) | ACTION: START_COMMAND | DETAILS: Вход обычного пользователя
+2025-10-04 23:06:30,875 - INFO - Stop polling...
+2025-10-04 23:06:30,875 - WARNING - Goodbye!
+2025-10-04 23:06:36,683 - INFO - Bot: Oko [@Oko1777_bot]
+2025-10-04 23:06:36,830 - WARNING - Updates were skipped successfully.
+2025-10-04 23:06:36,830 - INFO - Start polling.
+2025-10-04 23:06:38,495 - INFO - USER: 828609939 (DEGONF0990) | ACTION: START_COMMAND | DETAILS: Попытка входа без авторизации
+2025-10-04 23:06:43,679 - INFO - USER: 828609939 (DEGONF0990) | ACTION: AUTH_SUCCESS | DETAILS: Успешная авторизация администратора с кодом: 77777
+2025-10-04 23:10:12,177 - INFO - Stop polling...
+2025-10-04 23:10:12,178 - WARNING - Goodbye!
+2025-10-04 23:10:15,190 - INFO - Bot: Oko [@Oko1777_bot]
+2025-10-04 23:10:15,324 - WARNING - Updates were skipped successfully.
+2025-10-04 23:10:15,324 - INFO - Start polling.
+2025-10-04 23:10:21,522 - INFO - USER: 828609939 (DEGONF0990) | ACTION: START_COMMAND | DETAILS: Попытка входа без авторизации
+2025-10-04 23:10:25,378 - INFO - USER: 828609939 (DEGONF0990) | ACTION: AUTH_SUCCESS | DETAILS: Успешная авторизация администратора с кодом: 77777
+2025-10-04 23:10:27,049 - INFO - USER: 828609939 (DEGONF0990) | ACTION: LOGS_BUTTON | DETAILS: Просмотр логов через кнопку (админ)
+2025-10-04 23:36:09,563 - INFO - USER: 828609939 (DEGONF0990) | ACTION: START_COMMAND | DETAILS: Вход администратора
+2025-10-13 20:31:02,614 - INFO - Bot: Oko [@Oko1777_bot]
+2025-10-13 20:31:02,775 - WARNING - Updates were skipped successfully.
+2025-10-13 20:31:02,775 - INFO - Start polling.
+2025-10-13 20:31:23,115 - INFO - USER: 828609939 (DEGONF0990) | ACTION: AUTH_FAILED | DETAILS: Неверный код: 📊 Логи
+2025-10-13 20:31:43,745 - INFO - USER: 828609939 (DEGONF0990) | ACTION: START_COMMAND | DETAILS: Попытка входа без авторизации
+2025-10-13 20:31:50,349 - INFO - USER: 828609939 (DEGONF0990) | ACTION: AUTH_FAILED | DETAILS: Неверный код: 7777
+2025-10-13 20:32:12,228 - INFO - USER: 828609939 (DEGONF0990) | ACTION: AUTH_SUCCESS | DETAILS: Успешная авторизация администратора с кодом: 77777
+2025-10-13 20:32:40,639 - INFO - USER: 828609939 (DEGONF0990) | ACTION: TEXT_SEARCH_SUCCESS | DETAILS: Найдено 1 результатов по запросу: 89383338801
+2025-10-13 20:42:17,812 - INFO - Stop polling...
+2025-10-13 20:42:17,812 - WARNING - Goodbye!
+2025-10-15 23:32:27,690 - INFO - Bot: Oko [@Oko1777_bot]
+2025-10-15 23:32:27,815 - WARNING - Updates were skipped successfully.
+2025-10-15 23:32:27,815 - INFO - Start polling.
+2025-10-15 23:32:49,809 - INFO - Stop polling...
+2025-10-15 23:32:49,809 - WARNING - Goodbye!
+2025-10-15 23:33:11,939 - INFO - Bot: Oko [@Oko1777_bot]
+2025-10-15 23:33:12,078 - WARNING - Updates were skipped successfully.
+2025-10-15 23:33:12,078 - INFO - Start polling.
+2025-10-15 23:33:45,848 - INFO - USER: 828609939 (DEGONF0990) | ACTION: AUTH_FAILED | DETAILS: Неверный код: 📋 Список команд
+2025-10-15 23:34:04,093 - INFO - USER: 828609939 (DEGONF0990) | ACTION: START_COMMAND | DETAILS: Попытка входа без авторизации
+2025-10-15 23:34:11,794 - INFO - USER: 828609939 (DEGONF0990) | ACTION: AUTH_SUCCESS | DETAILS: Успешная авторизация пользователя с кодом: 12345
+2025-10-15 23:37:03,559 - INFO - Stop polling...
+2025-10-15 23:37:03,559 - WARNING - Goodbye!
+2025-10-15 23:37:18,528 - INFO - Bot: Oko [@Oko1777_bot]
+2025-10-15 23:37:18,678 - WARNING - Updates were skipped successfully.
+2025-10-15 23:37:18,678 - INFO - Start polling.
+2025-10-15 23:37:28,954 - INFO - USER: 828609939 (DEGONF0990) | ACTION: START_COMMAND | DETAILS: Попытка входа без авторизации
+2025-10-15 23:37:43,617 - INFO - USER: 828609939 (DEGONF0990) | ACTION: AUTH_SUCCESS | DETAILS: Успешная авторизация администратора с кодом: 77777
+2025-10-15 23:38:06,896 - INFO - USER: 828609939 (DEGONF0990) | ACTION: TEXT_SEARCH_SUCCESS | DETAILS: Найдено 1 результатов по запросу: 89383338801
+2025-10-15 23:41:35,085 - INFO - USER: 828609939 (DEGONF0990) | ACTION: LOGS_BUTTON | DETAILS: Просмотр логов через кнопку (админ)
+2025-10-15 23:49:40,446 - INFO - Stop polling...
+2025-10-15 23:49:40,446 - WARNING - Goodbye!
+2025-10-15 23:51:10,337 - INFO - Bot: Oko [@Oko1777_bot]
+2025-10-15 23:51:10,475 - WARNING - Updates were skipped successfully.
+2025-10-15 23:51:10,476 - INFO - Start polling.
+2025-10-15 23:51:31,322 - INFO - USER: 828609939 (DEGONF0990) | ACTION: TEXT_SEARCH | DETAILS: Попытка поиска без авторизации
+2025-10-15 23:51:34,435 - INFO - USER: 828609939 (DEGONF0990) | ACTION: START_COMMAND | DETAILS: Попытка входа без авторизации
+2025-10-15 23:51:43,708 - INFO - USER: 828609939 (DEGONF0990) | ACTION: AUTH_SUCCESS | DETAILS: Успешная авторизация пользователя с кодом: 12345
+2025-10-15 23:51:45,698 - INFO - USER: 828609939 (DEGONF0990) | ACTION: ADD_START | DETAILS: Начало пошагового добавления записи
+2025-10-15 23:52:50,679 - INFO - USER: 828609939 (DEGONF0990) | ACTION: ADD_CANCELLED | DETAILS: Отмена добавления записи
+2025-10-15 23:53:12,616 - INFO - USER: 828609939 (DEGONF0990) | ACTION: ADD_START | DETAILS: Начало пошагового добавления записи
+2025-10-15 23:55:36,169 - INFO - USER: 828609939 (DEGONF0990) | ACTION: ADD_SUCCESS | DETAILS: Добавлена запись: Александр Дмитриевич Рожков, 89093036633, 1999-03-03
+2025-10-15 23:56:07,421 - INFO - USER: 828609939 (DEGONF0990) | ACTION: TEXT_SEARCH_SUCCESS | DETAILS: Найдено 1 результатов по запросу: 89093036633
+2025-10-15 23:56:26,853 - INFO - Stop polling...
+2025-10-15 23:56:26,854 - WARNING - Goodbye!
+2025-10-16 00:04:27,522 - INFO - Bot: Oko [@Oko1777_bot]
+2025-10-16 00:04:27,657 - WARNING - Updates were skipped successfully.
+2025-10-16 00:04:27,657 - INFO - Start polling.
+2025-10-16 00:04:46,625 - INFO - USER: 828609939 (DEGONF0990) | ACTION: START_COMMAND | DETAILS: Попытка входа без авторизации
+2025-10-16 00:04:50,101 - INFO - USER: 828609939 (DEGONF0990) | ACTION: AUTH_SUCCESS | DETAILS: Успешная авторизация администратора с кодом: 77777
+2025-10-16 00:05:09,413 - INFO - USER: 828609939 (DEGONF0990) | ACTION: TEXT_SEARCH_SUCCESS | DETAILS: Найдено 1 результатов по запросу: 88005553535
+2025-10-16 00:06:09,561 - INFO - USER: 828609939 (DEGONF0990) | ACTION: START_COMMAND | DETAILS: Вход администратора
+2025-10-16 00:06:20,082 - INFO - USER: 828609939 (DEGONF0990) | ACTION: START_COMMAND | DETAILS: Вход администратора
+2025-10-16 00:06:25,452 - INFO - Stop polling...
+2025-10-16 00:06:25,452 - WARNING - Goodbye!
+2025-10-16 00:06:32,721 - INFO - Bot: Oko [@Oko1777_bot]
+2025-10-16 00:06:32,865 - WARNING - Updates were skipped successfully.
+2025-10-16 00:06:32,866 - INFO - Start polling.
+2025-10-16 00:06:36,301 - INFO - USER: 828609939 (DEGONF0990) | ACTION: START_COMMAND | DETAILS: Попытка входа без авторизации
+2025-10-16 00:06:40,083 - INFO - USER: 828609939 (DEGONF0990) | ACTION: AUTH_SUCCESS | DETAILS: Успешная авторизация пользователя с кодом: 12345
+2025-10-16 00:17:04,844 - INFO - Stop polling...
+2025-10-16 00:17:04,845 - WARNING - Goodbye!
