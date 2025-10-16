@@ -106,3 +106,55 @@
 2025-10-16 00:06:40,083 - INFO - USER: 828609939 (DEGONF0990) | ACTION: AUTH_SUCCESS | DETAILS: Успешная авторизация пользователя с кодом: 12345
 2025-10-16 00:17:04,844 - INFO - Stop polling...
 2025-10-16 00:17:04,845 - WARNING - Goodbye!
+2025-10-16 20:07:59,326 - INFO - Bot: Oko [@Oko1777_bot]
+2025-10-16 20:07:59,468 - WARNING - Updates were skipped successfully.
+2025-10-16 20:07:59,468 - INFO - Start polling.
+2025-10-16 20:08:09,436 - INFO - USER: 828609939 (DEGONF0990) | ACTION: AUTH_FAILED | DETAILS: Неверный код: 📚 Документация
+2025-10-16 20:08:20,384 - INFO - USER: 828609939 (DEGONF0990) | ACTION: AUTH_SUCCESS | DETAILS: Успешная авторизация администратора с кодом: 77777
+2025-10-16 20:08:57,310 - INFO - USER: 1395689655 (vodka668) | ACTION: AUTH_FAILED | DETAILS: Неверный код: 📚 Документация
+2025-10-16 20:09:02,295 - INFO - USER: 1395689655 (vodka668) | ACTION: AUTH_FAILED | DETAILS: Неверный код: 📋 Список команд
+2025-10-16 20:09:05,999 - INFO - USER: 1395689655 (vodka668) | ACTION: AUTH_SUCCESS | DETAILS: Успешная авторизация пользователя с кодом: 12345
+2025-10-16 20:09:17,978 - INFO - USER: 1395689655 (vodka668) | ACTION: FIND_COMMAND | DETAILS: Пустой запрос
+2025-10-16 20:09:32,732 - INFO - USER: 1395689655 (vodka668) | ACTION: TEXT_SEARCH_SUCCESS | DETAILS: Найдено 2 результатов по запросу: Александр
+2025-10-16 20:10:02,602 - INFO - USER: 1395689655 (vodka668) | ACTION: TEXT_SEARCH_SUCCESS | DETAILS: Найдено 1 результатов по запросу: Ставрополь
+2025-10-16 20:10:08,252 - INFO - Stop polling...
+2025-10-16 20:10:08,253 - WARNING - Goodbye!
+2025-10-16 20:10:31,812 - INFO - Bot: Oko [@Oko1777_bot]
+2025-10-16 20:10:31,973 - WARNING - Updates were skipped successfully.
+2025-10-16 20:10:31,973 - INFO - Start polling.
+2025-10-16 20:11:44,985 - INFO - USER: 1395689655 (vodka668) | ACTION: AUTH_FAILED | DETAILS: Неверный код: ➕ Добавить
+2025-10-16 20:11:49,592 - INFO - USER: 1395689655 (vodka668) | ACTION: AUTH_SUCCESS | DETAILS: Успешная авторизация пользователя с кодом: 12345
+2025-10-16 20:11:50,853 - INFO - USER: 1395689655 (vodka668) | ACTION: ADD_START | DETAILS: Начало пошагового добавления записи
+2025-10-16 20:12:58,836 - INFO - USER: 1395689655 (vodka668) | ACTION: ADD_SUCCESS | DETAILS: Добавлена запись: Бобров Альберт Газманович, 79094053888, 2000-11-04
+2025-10-16 20:17:50,994 - INFO - Stop polling...
+2025-10-16 20:17:50,994 - WARNING - Goodbye!
+2025-10-16 20:18:06,801 - INFO - Bot: Oko [@Oko1777_bot]
+2025-10-16 20:18:06,934 - WARNING - Updates were skipped successfully.
+2025-10-16 20:18:06,934 - INFO - Start polling.
+2025-10-16 20:18:09,379 - INFO - USER: 1395689655 (vodka668) | ACTION: START_COMMAND | DETAILS: Попытка входа без авторизации
+2025-10-16 20:18:14,645 - INFO - USER: 1395689655 (vodka668) | ACTION: AUTH_SUCCESS | DETAILS: Успешная авторизация администратора с кодом: 77777
+2025-10-16 20:36:03,360 - INFO - Stop polling...
+2025-10-16 20:36:03,361 - WARNING - Goodbye!
+2025-10-16 20:48:21,987 - INFO - Bot: Oko [@Oko1777_bot]
+2025-10-16 20:48:22,130 - WARNING - Updates were skipped successfully.
+2025-10-16 20:48:22,130 - INFO - Start polling.
+2025-10-16 20:48:27,107 - INFO - USER: 828609939 (DEGONF0990) | ACTION: START_COMMAND | DETAILS: Попытка входа без авторизации
+2025-10-16 20:49:16,725 - INFO - USER: 828609939 (DEGONF0990) | ACTION: TEXT_SEARCH_SUCCESS | DETAILS: Найдено 2 результатов по запросу: Александр
+2025-10-16 20:49:30,067 - INFO - USER: 828609939 (DEGONF0990) | ACTION: TEXT_SEARCH_SUCCESS | DETAILS: Найдено 1 результатов по запросу: Бобров
+2025-10-16 20:51:59,447 - INFO - USER: 828609939 (DEGONF0990) | ACTION: START_COMMAND | DETAILS: Вход обычного пользователя
+2025-10-16 20:52:05,205 - INFO - USER: 828609939 (DEGONF0990) | ACTION: TEXT_SEARCH_SUCCESS | DETAILS: Найдено 3 результатов по запросу: 1234
+2025-10-16 20:57:40,720 - INFO - Stop polling...
+2025-10-16 20:57:40,720 - WARNING - Goodbye!
+2025-10-16 20:57:47,826 - INFO - Bot: Oko [@Oko1777_bot]
+2025-10-16 20:57:47,970 - WARNING - Updates were skipped successfully.
+2025-10-16 20:57:47,970 - INFO - Start polling.
+2025-10-16 20:58:00,285 - INFO - USER: 828609939 (DEGONF0990) | ACTION: START_COMMAND | DETAILS: Попытка входа без авторизации
+2025-10-16 20:58:27,705 - INFO - USER: 828609939 (DEGONF0990) | ACTION: UNKNOWN_COMMAND | DETAILS: Неизвестная команда: 576
+2025-10-16 20:59:05,316 - INFO - USER: 828609939 (DEGONF0990) | ACTION: SEARCH_SUCCESS | DETAILS: Найдено 1 результатов по запросу: 89093036633
+2025-10-16 21:02:18,424 - INFO - Stop polling...
+2025-10-16 21:02:18,424 - WARNING - Goodbye!
+2025-10-16 21:02:20,934 - INFO - Bot: Oko [@Oko1777_bot]
+2025-10-16 21:02:21,071 - WARNING - Updates were skipped successfully.
+2025-10-16 21:02:21,071 - INFO - Start polling.
+2025-10-16 21:02:22,119 - INFO - Stop polling...
+2025-10-16 21:02:22,120 - WARNING - Goodbye!

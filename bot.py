@@ -42,9 +42,13 @@ class AddPersonStates(StatesGroup):
     waiting_for_address = State()  # Ожидание адреса (опционально)
     waiting_for_passport = State() # Ожидание паспорта (опционально)
 
+class SearchStates(StatesGroup):
+    waiting_for_query = State()    # Ожидание ввода поискового запроса
+
 # Глобальные переменные для отслеживания авторизации
 authorized_users = set()  # Обычные пользователи
 authorized_admins = set()  # Администраторы
+authorized_usernames = set()  # Список имен пользователей, прошедших авторизацию
 
 # Словарь для хранения временных данных пользователей при добавлении записи
 user_temp_data = {}
@@ -101,6 +105,18 @@ database = load_database()
 # Функции для логирования
 def log_user_action(user_id, username, action, details=""):
     """Записывает действие пользователя в лог"""
+    # Не логируем события авторизации для уже авторизованных пользователей
+    try:
+        normalized_username = (username or "").strip()
+        if action.startswith("AUTH") and (
+            user_id in authorized_users or
+            user_id in authorized_admins or
+            (normalized_username and normalized_username in authorized_usernames)
+        ):
+            return
+    except Exception:
+        # В случае любых сбоев проверки — не блокируем основное логирование
+        pass
     timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     log_message = f"USER: {user_id} ({username}) | ACTION: {action} | DETAILS: {details}"
     logger.info(log_message)
@@ -248,6 +264,8 @@ async def check_access_code(message: types.Message):
     
     if entered_code == USER_ACCESS_CODE:
         authorized_users.add(user_id)
+        if username:
+            authorized_usernames.add(username)
         log_user_action(user_id, username, "AUTH_SUCCESS", f"Успешная авторизация пользователя с кодом: {entered_code}")
         help_text = """✅ Код доступа принят! Добро пожаловать!
 
@@ -257,6 +275,8 @@ async def check_access_code(message: types.Message):
         await message.answer(help_text, reply_markup=get_main_keyboard())
     elif entered_code == ADMIN_ACCESS_CODE:
         authorized_admins.add(user_id)
+        if username:
+            authorized_usernames.add(username)
         log_user_action(user_id, username, "AUTH_SUCCESS", f"Успешная авторизация администратора с кодом: {entered_code}")
         help_text = """👑 Код администратора принят! Добро пожаловать!
 
@@ -271,11 +291,62 @@ async def check_access_code(message: types.Message):
 
 # Обработчики кнопок
 @dp.message_handler(lambda message: message.text == "🔍 Поиск")
-async def search_button_handler(message: types.Message):
+async def search_button_handler(message: types.Message, state: FSMContext):
     if not is_authorized(message.from_user.id):
         await message.answer("Доступ запрещен! Сначала введите код доступа через /start")
         return
-    await message.answer("🔍 <b>Поиск в базе данных</b>\n\n<i>Введите поисковый запрос (ФИО, телефон, номер авто, адрес или паспорт):</i>", parse_mode='HTML')
+    await SearchStates.waiting_for_query.set()
+    cancel_keyboard = ReplyKeyboardMarkup(
+        resize_keyboard=True,
+        one_time_keyboard=False,
+        keyboard=[[KeyboardButton(text="❌ Отмена")]]
+    )
+    await message.answer(
+        "🔍 <b>Поиск в базе данных</b>\n\n"
+        "<i>Введите поисковый запрос (ФИО, телефон, номер авто, адрес или паспорт):</i>",
+        parse_mode='HTML',
+        reply_markup=cancel_keyboard
+    )
+
+@dp.message_handler(state=SearchStates.waiting_for_query)
+async def process_search_query(message: types.Message, state: FSMContext):
+    user_id = message.from_user.id
+    username = message.from_user.username or "Unknown"
+
+    # Отмена поиска
+    if message.text == "❌ Отмена":
+        role = get_user_role(user_id)
+        keyboard = get_admin_keyboard() if role == "admin" else get_main_keyboard()
+        await message.answer("Поиск отменён.", reply_markup=keyboard)
+        await state.finish()
+        return
+
+    query = message.text.strip()
+    if not query:
+        await message.answer("Введите непустой запрос или нажмите \"❌ Отмена\"")
+        return
+
+    results = []
+    for record in database:
+        if (query in record["fio"] or query in record["phone"] or 
+            query in record.get("car_number", "") or query in record.get("address", "") or 
+            query in record.get("passport", "")):
+            results.append(format_record(record))
+
+    if results:
+        log_user_action(user_id, username, "SEARCH_SUCCESS", f"Найдено {len(results)} результатов по запросу: {query}")
+        result_message = f"🔍 <b>Найдено результатов: {len(results)}</b>\n\n"
+        result_message += "\n\n".join(results)
+        await message.answer(result_message, parse_mode='HTML')
+    else:
+        log_user_action(user_id, username, "SEARCH_NO_RESULTS", f"Ничего не найдено по запросу: {query}")
+        await message.answer("🔍 <b>Ничего не найдено</b>\n\n<i>Попробуйте изменить поисковый запрос</i>", parse_mode='HTML')
+
+    # Завершаем состояние и возвращаем основную клавиатуру
+    role = get_user_role(user_id)
+    keyboard = get_admin_keyboard() if role == "admin" else get_main_keyboard()
+    await state.finish()
+    await message.answer(" ", reply_markup=keyboard)
 
 @dp.message_handler(lambda message: message.text == "➕ Добавить")
 async def add_button_handler(message: types.Message, state: FSMContext):
@@ -648,8 +719,17 @@ async def find_cmd(message: types.Message):
     
     query = message.get_args().strip()
     if not query:
-        log_user_action(user_id, username, "FIND_COMMAND", "Пустой запрос")
-        await message.answer("Используй: /find <ФИО, телефон, номер авто, адрес или паспорт>. Или напишите поисковый запрос")
+        # Переводим в состояние ожидания запроса, если аргумент не указан
+        await SearchStates.waiting_for_query.set()
+        cancel_keyboard = ReplyKeyboardMarkup(
+            resize_keyboard=True,
+            one_time_keyboard=False,
+            keyboard=[[KeyboardButton(text="❌ Отмена")]]
+        )
+        await message.answer(
+            "Используй: /find <запрос> или введите запрос ниже:",
+            reply_markup=cancel_keyboard
+        )
         return
 
     results = []
@@ -707,10 +787,7 @@ async def help_cmd(message: types.Message):
     if not is_authorized(message.from_user.id):
         await message.answer("Доступ запрещен! Сначала введите код доступа через /start")
         return
-    help_text = """
-
-Справка: Тут будет информация о боте
-"""
+    help_text = """Справка: Тут будет информация о боте"""
     await message.answer(help_text)
 
 # Команда для просмотра логов (только для админов)
@@ -748,36 +825,19 @@ async def logs_cmd(message: types.Message):
     
     await message.answer(log_text)
 
-# Обработчик любого текста (поиск по имени или телефону) - только если не в FSM состоянии
+# Обработчик любого произвольного текста вне состояний — выводит подсказку, не выполняя поиск
 @dp.message_handler(content_types=["text"], state=None)
-async def text_handler(message: types.Message):
+async def unknown_text_handler(message: types.Message):
     user_id = message.from_user.id
     username = message.from_user.username or "Unknown"
-    
+
     if not is_authorized(user_id):
-        log_user_action(user_id, username, "TEXT_SEARCH", "Попытка поиска без авторизации")
-        await message.answer("Доступ запрещен! Сначала введите код доступа через /start")
-        return
-    
-    query = message.text.strip()
-    if not query:
+        log_user_action(user_id, username, "UNKNOWN_COMMAND", "Сообщение без авторизации")
+        await message.answer("Я не знаю такую команду. Введите /start для авторизации.")
         return
 
-    results = []
-    for record in database:
-        if (query in record["fio"] or query in record["phone"] or 
-            query in record.get("car_number", "") or query in record.get("address", "") or 
-            query in record.get("passport", "")):
-            results.append(format_record(record))
-
-    if results:
-        log_user_action(user_id, username, "TEXT_SEARCH_SUCCESS", f"Найдено {len(results)} результатов по запросу: {query}")
-        result_message = f"🔍 <b>Найдено результатов: {len(results)}</b>\n\n"
-        result_message += "\n\n".join(results)
-        await message.answer(result_message, parse_mode='HTML')
-    else:
-        log_user_action(user_id, username, "TEXT_SEARCH_NO_RESULTS", f"Ничего не найдено по запросу: {query}")
-        await message.answer("🔍 <b>Ничего не найдено</b>\n\n<i>Попробуйте изменить поисковый запрос</i>", parse_mode='HTML')
+    log_user_action(user_id, username, "UNKNOWN_COMMAND", f"Неизвестная команда: {message.text}")
+    await message.answer("Я не знаю такую команду. Используйте кнопки или команды: /find, /add, /info")
 
 # Запуск
 if __name__ == "__main__":
