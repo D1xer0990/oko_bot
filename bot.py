@@ -359,8 +359,7 @@ async def search_button_handler(message: types.Message, state: FSMContext):
     await SearchStates.waiting_for_query.set()
     await message.answer(
         "🔍 <b>Поиск в базе данных</b>\n\n"
-        "<i>Введите поисковый запрос (ФИО, телефон, номер авто, адрес или паспорт):</i>\n\n"
-        "💡 <i>Для отмены используйте команду /start</i>",
+        "<i>Введите поисковый запрос (ФИО, телефон, номер авто, адрес или паспорт):</i>",
         parse_mode='HTML'
     )
 
@@ -379,7 +378,7 @@ async def process_search_query(message: types.Message, state: FSMContext):
 
     query = message.text.strip()
     if not query:
-        await message.answer("Введите непустой запрос или используйте /start для отмены")
+        await message.answer("Введите непустой запрос")
         return
 
     results = []
@@ -400,7 +399,7 @@ async def process_search_query(message: types.Message, state: FSMContext):
     role = get_user_role(user_id)
     keyboard = get_admin_keyboard() if role == "admin" else get_main_keyboard()
     await state.finish()
-    await message.answer("Поиск завершен.", reply_markup=keyboard)
+    await message.answer(" ", reply_markup=keyboard)
 
 @dp.message_handler(lambda message: message.text == "➕ Добавить")
 async def add_button_handler(message: types.Message, state: FSMContext):
@@ -779,8 +778,7 @@ async def find_cmd(message: types.Message):
         # Переводим в состояние ожидания запроса, если аргумент не указан
         await SearchStates.waiting_for_query.set()
         await message.answer(
-            "Используй: /find <запрос> или введите запрос ниже:\n\n"
-            "💡 <i>Для отмены используйте команду /start</i>",
+            "Используй: /find <запрос> или введите запрос ниже:",
             parse_mode='HTML'
         )
         return
