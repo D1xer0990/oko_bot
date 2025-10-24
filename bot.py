@@ -79,6 +79,9 @@ class AddPersonStates(StatesGroup):
 class SearchStates(StatesGroup):
     waiting_for_query = State()    # Ожидание ввода поискового запроса
 
+class CancelStates(StatesGroup):
+    waiting_for_cancel = State()    # Состояние для отмены (не используется, но нужно для разделения)
+
 # Глобальные переменные для отслеживания авторизации
 authorized_users = set()  # Обычные пользователи
 authorized_admins = set()  # Администраторы
@@ -354,16 +357,11 @@ async def search_button_handler(message: types.Message, state: FSMContext):
         await message.answer("Доступ запрещен! Сначала введите код доступа через /start")
         return
     await SearchStates.waiting_for_query.set()
-    cancel_keyboard = ReplyKeyboardMarkup(
-        resize_keyboard=True,
-        one_time_keyboard=False,
-        keyboard=[[KeyboardButton(text="❌ Отмена")]]
-    )
     await message.answer(
         "🔍 <b>Поиск в базе данных</b>\n\n"
-        "<i>Введите поисковый запрос (ФИО, телефон, номер авто, адрес или паспорт):</i>",
-        parse_mode='HTML',
-        reply_markup=cancel_keyboard
+        "<i>Введите поисковый запрос (ФИО, телефон, номер авто, адрес или паспорт):</i>\n\n"
+        "💡 <i>Для отмены используйте команду /start</i>",
+        parse_mode='HTML'
     )
 
 @dp.message_handler(state=SearchStates.waiting_for_query)
@@ -371,8 +369,8 @@ async def process_search_query(message: types.Message, state: FSMContext):
     user_id = message.from_user.id
     username = message.from_user.username or "Unknown"
 
-    # Отмена поиска
-    if message.text == "❌ Отмена":
+    # Отмена поиска через команду /start
+    if message.text == "/start":
         role = get_user_role(user_id)
         keyboard = get_admin_keyboard() if role == "admin" else get_main_keyboard()
         await message.answer("Поиск отменён.", reply_markup=keyboard)
@@ -381,7 +379,7 @@ async def process_search_query(message: types.Message, state: FSMContext):
 
     query = message.text.strip()
     if not query:
-        await message.answer("Введите непустой запрос или нажмите \"❌ Отмена\"")
+        await message.answer("Введите непустой запрос или используйте /start для отмены")
         return
 
     results = []
@@ -402,7 +400,7 @@ async def process_search_query(message: types.Message, state: FSMContext):
     role = get_user_role(user_id)
     keyboard = get_admin_keyboard() if role == "admin" else get_main_keyboard()
     await state.finish()
-    await message.answer(" ", reply_markup=keyboard)
+    await message.answer("Поиск завершен.", reply_markup=keyboard)
 
 @dp.message_handler(lambda message: message.text == "➕ Добавить")
 async def add_button_handler(message: types.Message, state: FSMContext):
@@ -780,14 +778,10 @@ async def find_cmd(message: types.Message):
     if not query:
         # Переводим в состояние ожидания запроса, если аргумент не указан
         await SearchStates.waiting_for_query.set()
-        cancel_keyboard = ReplyKeyboardMarkup(
-            resize_keyboard=True,
-            one_time_keyboard=False,
-            keyboard=[[KeyboardButton(text="❌ Отмена")]]
-        )
         await message.answer(
-            "Используй: /find <запрос> или введите запрос ниже:",
-            reply_markup=cancel_keyboard
+            "Используй: /find <запрос> или введите запрос ниже:\n\n"
+            "💡 <i>Для отмены используйте команду /start</i>",
+            parse_mode='HTML'
         )
         return
 
