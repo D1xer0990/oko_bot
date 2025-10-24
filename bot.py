@@ -9,10 +9,44 @@ from aiogram.contrib.fsm_storage.memory import MemoryStorage
 from aiogram.dispatcher import FSMContext
 from aiogram.dispatcher.filters.state import State, StatesGroup
 from dotenv import load_dotenv
+from sqlalchemy import create_engine, Column, Integer, String, DateTime, Text
+from sqlalchemy.ext.declarative import declarative_base
+from sqlalchemy.orm import sessionmaker
 
 # Загружаем токен из .env
 load_dotenv()
 BOT_TOKEN = os.getenv("BOT_TOKEN")
+DATABASE_URL = os.getenv("DATABASE_URL")
+
+# Настройка базы данных
+Base = declarative_base()
+engine = create_engine(DATABASE_URL)
+SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+
+# Модели данных
+class Person(Base):
+    __tablename__ = "persons"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    fio = Column(String, nullable=False)
+    phone = Column(String, nullable=False)
+    birth = Column(String, nullable=False)
+    car_number = Column(String, nullable=True)
+    address = Column(Text, nullable=True)
+    passport = Column(String, nullable=True)
+
+class UserLog(Base):
+    __tablename__ = "user_logs"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    timestamp = Column(DateTime, default=datetime.utcnow)
+    user_id = Column(Integer, nullable=False)
+    username = Column(String, nullable=True)
+    action = Column(String, nullable=False)
+    details = Column(Text, nullable=True)
+
+# Создаем таблицы
+Base.metadata.create_all(bind=engine)
 
 bot = Bot(token=BOT_TOKEN)
 storage = MemoryStorage()
@@ -56,51 +90,78 @@ user_temp_data = {}
 # Функция для красивого форматирования записи
 def format_record(record):
     """Форматирует запись в простом и чистом виде"""
-    result = f"👤 ФИО: {record['fio']}\n"
-    result += f"📞 Телефон: {record['phone']}\n"
-    result += f"📅 Дата рождения: {record['birth']}\n"
+    result = f"👤 ФИО: {record.fio}\n"
+    result += f"📞 Телефон: {record.phone}\n"
+    result += f"📅 Дата рождения: {record.birth}\n"
     
-    if record.get("car_number"):
-        result += f"🚗 Номер авто: {record['car_number']}\n"
-    if record.get("address"):
-        result += f"🏠 Адрес: {record['address']}\n"
-    if record.get("passport"):
-        result += f"📄 Паспорт: {record['passport']}\n"
+    if record.car_number:
+        result += f"🚗 Номер авто: {record.car_number}\n"
+    if record.address:
+        result += f"🏠 Адрес: {record.address}\n"
+    if record.passport:
+        result += f"📄 Паспорт: {record.passport}\n"
     
     return result.rstrip()  # Убираем последний перенос строки
 
-# Файл для хранения данных
-DATABASE_FILE = "database.json"
-
-# Функции для работы с файлом
-def load_database():
+# Функции для работы с базой данных
+def get_db():
+    db = SessionLocal()
     try:
-        if os.path.exists(DATABASE_FILE):
-            with open(DATABASE_FILE, 'r', encoding='utf-8') as f:
-                return json.load(f)
-        else:
-            # Создаем файл с начальными данными
-            initial_data = [
-                {"fio": "Иванов Иван Иванович", "phone": "79991234567", "birth": "1990-01-01"},
-                {"fio": "Петров Петр Петрович", "phone": "79990001122", "birth": "1985-05-12"},
-            ]
-            save_database(initial_data)
-            return initial_data
+        yield db
+    finally:
+        db.close()
+
+def load_database():
+    """Загружает все записи из базы данных"""
+    try:
+        db = SessionLocal()
+        persons = db.query(Person).all()
+        db.close()
+        return persons
     except Exception as e:
         print(f"Ошибка загрузки базы данных: {e}")
         return []
 
-def save_database(data):
+def save_person(person_data):
+    """Сохраняет новую запись в базу данных"""
     try:
-        with open(DATABASE_FILE, 'w', encoding='utf-8') as f:
-            json.dump(data, f, ensure_ascii=False, indent=2)
-        return True
+        db = SessionLocal()
+        person = Person(**person_data)
+        db.add(person)
+        db.commit()
+        db.refresh(person)
+        db.close()
+        return person
     except Exception as e:
-        print(f"Ошибка сохранения базы данных: {e}")
-        return False
+        print(f"Ошибка сохранения записи: {e}")
+        return None
 
-# Загружаем базу данных
-database = load_database()
+def search_persons(query):
+    """Поиск записей по запросу"""
+    try:
+        db = SessionLocal()
+        persons = db.query(Person).filter(
+            Person.fio.contains(query) |
+            Person.phone.contains(query) |
+            Person.car_number.contains(query) |
+            Person.address.contains(query) |
+            Person.passport.contains(query)
+        ).all()
+        db.close()
+        return persons
+    except Exception as e:
+        print(f"Ошибка поиска: {e}")
+        return []
+
+# Инициализация базы данных
+try:
+    # Проверяем подключение к базе данных
+    db = SessionLocal()
+    db.close()
+    logger.info("Подключение к базе данных успешно")
+except Exception as e:
+    logger.error(f"Ошибка подключения к базе данных: {e}")
+    logger.error("Бот будет работать с ограниченным функционалом")
 
 # Функции для логирования
 def log_user_action(user_id, username, action, details=""):
@@ -117,45 +178,39 @@ def log_user_action(user_id, username, action, details=""):
     except Exception:
         # В случае любых сбоев проверки — не блокируем основное логирование
         pass
+    
     timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     log_message = f"USER: {user_id} ({username}) | ACTION: {action} | DETAILS: {details}"
     logger.info(log_message)
     
-    # Также записываем в JSON файл для удобного просмотра
-    log_entry = {
-        "timestamp": timestamp,
-        "user_id": user_id,
-        "username": username,
-        "action": action,
-        "details": details
-    }
-    
+    # Записываем в базу данных
     try:
-        # Загружаем существующие логи
-        if os.path.exists("user_logs.json"):
-            with open("user_logs.json", "r", encoding="utf-8") as f:
-                logs = json.load(f)
-        else:
-            logs = []
-        
-        # Добавляем новую запись
-        logs.append(log_entry)
-        
-        # Сохраняем обратно
-        with open("user_logs.json", "w", encoding="utf-8") as f:
-            json.dump(logs, f, ensure_ascii=False, indent=2)
-            
+        db = SessionLocal()
+        log_entry = UserLog(
+            user_id=user_id,
+            username=username,
+            action=action,
+            details=details
+        )
+        db.add(log_entry)
+        db.commit()
+        db.close()
     except Exception as e:
-        logger.error(f"Ошибка записи в JSON лог: {e}")
+        logger.error(f"Ошибка записи в базу данных: {e}")
 
 def get_user_logs(limit=10):
     """Получает последние логи пользователей"""
     try:
-        if os.path.exists("user_logs.json"):
-            with open("user_logs.json", "r", encoding="utf-8") as f:
-                logs = json.load(f)
-            return logs[-limit:] if len(logs) > limit else logs
-        return []
+        db = SessionLocal()
+        logs = db.query(UserLog).order_by(UserLog.timestamp.desc()).limit(limit).all()
+        db.close()
+        return [{
+            "timestamp": log.timestamp.strftime("%Y-%m-%d %H:%M:%S"),
+            "user_id": log.user_id,
+            "username": log.username,
+            "action": log.action,
+            "details": log.details
+        } for log in logs]
     except Exception as e:
         logger.error(f"Ошибка чтения логов: {e}")
         return []
@@ -163,13 +218,16 @@ def get_user_logs(limit=10):
 def get_failed_auth_logs(limit=10):
     """Получает только неудачные попытки авторизации"""
     try:
-        if os.path.exists("user_logs.json"):
-            with open("user_logs.json", "r", encoding="utf-8") as f:
-                logs = json.load(f)
-            # Фильтруем только неудачные авторизации
-            failed_logs = [log for log in logs if log['action'] == 'AUTH_FAILED']
-            return failed_logs[-limit:] if len(failed_logs) > limit else failed_logs
-        return []
+        db = SessionLocal()
+        logs = db.query(UserLog).filter(UserLog.action == 'AUTH_FAILED').order_by(UserLog.timestamp.desc()).limit(limit).all()
+        db.close()
+        return [{
+            "timestamp": log.timestamp.strftime("%Y-%m-%d %H:%M:%S"),
+            "user_id": log.user_id,
+            "username": log.username,
+            "action": log.action,
+            "details": log.details
+        } for log in logs]
     except Exception as e:
         logger.error(f"Ошибка чтения логов: {e}")
         return []
@@ -327,11 +385,9 @@ async def process_search_query(message: types.Message, state: FSMContext):
         return
 
     results = []
-    for record in database:
-        if (query in record["fio"] or query in record["phone"] or 
-            query in record.get("car_number", "") or query in record.get("address", "") or 
-            query in record.get("passport", "")):
-            results.append(format_record(record))
+    persons = search_persons(query)
+    for person in persons:
+        results.append(format_record(person))
 
     if results:
         log_user_action(user_id, username, "SEARCH_SUCCESS", f"Найдено {len(results)} результатов по запросу: {query}")
@@ -428,10 +484,15 @@ async def process_phone(message: types.Message, state: FSMContext):
         return
     
     # Проверяем, нет ли дубликатов
-    for record in database:
-        if record["phone"] == phone:
+    try:
+        db = SessionLocal()
+        existing_person = db.query(Person).filter(Person.phone == phone).first()
+        db.close()
+        if existing_person:
             await message.answer(f"❌ <b>Ошибка:</b> Запись с телефоном {phone} уже существует!\n\n🔄 <i>Попробуйте другой номер:</i>", parse_mode='HTML')
             return
+    except Exception as e:
+        logger.error(f"Ошибка проверки дубликатов: {e}")
     
     # Сохраняем телефон во временные данные
     user_temp_data[user_id]['phone'] = phone
@@ -581,16 +642,14 @@ async def finish_add_process(message: types.Message, state: FSMContext, user_id:
         "passport": temp_data.get('passport', '')
     }
     
-    # Добавляем в базу данных
-    database.append(new_record)
-    
-    # Сохраняем в файл
-    if save_database(database):
+    # Сохраняем в базу данных
+    saved_person = save_person(new_record)
+    if saved_person:
         log_user_action(user_id, username, "ADD_SUCCESS", f"Добавлена запись: {new_record['fio']}, {new_record['phone']}, {new_record['birth']}")
         
         # Формируем красивое сообщение с результатом
         result_message = "🎉 <b>Запись успешно добавлена!</b>\n\n"
-        result_message += format_record(new_record)
+        result_message += format_record(saved_person)
         
         # Возвращаем основную клавиатуру
         role = get_user_role(user_id)
@@ -733,11 +792,9 @@ async def find_cmd(message: types.Message):
         return
 
     results = []
-    for record in database:
-        if (query in record["fio"] or query in record["phone"] or 
-            query in record.get("car_number", "") or query in record.get("address", "") or 
-            query in record.get("passport", "")):
-            results.append(format_record(record))
+    persons = search_persons(query)
+    for person in persons:
+        results.append(format_record(person))
 
     if results:
         log_user_action(user_id, username, "SEARCH_SUCCESS", f"Найдено {len(results)} результатов по запросу: {query}")
