@@ -9,18 +9,26 @@ from aiogram.contrib.fsm_storage.memory import MemoryStorage
 from aiogram.dispatcher import FSMContext
 from aiogram.dispatcher.filters.state import State, StatesGroup
 from dotenv import load_dotenv
-from sqlalchemy import create_engine, Column, Integer, String, DateTime, Text
+from sqlalchemy import create_engine, Column, Integer, String, DateTime, Text, Index
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
+from contextlib import contextmanager
+import re
 
 # Загружаем токен из .env
 load_dotenv()
 BOT_TOKEN = os.getenv("BOT_TOKEN")
 DATABASE_URL = os.getenv("DATABASE_URL")
 
-# Настройка базы данных
+# Настройка базы данных с пулом соединений
 Base = declarative_base()
-engine = create_engine(DATABASE_URL)
+engine = create_engine(
+    DATABASE_URL,
+    pool_size=5,  # Размер пула соединений
+    max_overflow=10,  # Максимальное количество дополнительных соединений
+    pool_recycle=3600,  # Время жизни соединения в секундах (1 час)
+    pool_pre_ping=True  # Проверка соединений перед использованием
+)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 # Модели данных
@@ -28,22 +36,32 @@ class Person(Base):
     __tablename__ = "persons"
     
     id = Column(Integer, primary_key=True, index=True)
-    fio = Column(String, nullable=False)
-    phone = Column(String, nullable=False)
+    fio = Column(String, nullable=False, index=True)  # Индекс для быстрого поиска
+    phone = Column(String, nullable=False, index=True, unique=True)  # Индекс и уникальность
     birth = Column(String, nullable=False)
-    car_number = Column(String, nullable=True)
+    car_number = Column(String, nullable=True, index=True)  # Индекс для поиска
     address = Column(Text, nullable=True)
-    passport = Column(String, nullable=True)
+    passport = Column(String, nullable=True, index=True)  # Индекс для поиска
+    
+    # Составной индекс для поиска
+    __table_args__ = (
+        Index('idx_person_search', 'fio', 'phone'),
+    )
 
 class UserLog(Base):
     __tablename__ = "user_logs"
     
     id = Column(Integer, primary_key=True, index=True)
-    timestamp = Column(DateTime, default=datetime.utcnow)
-    user_id = Column(Integer, nullable=False)
+    timestamp = Column(DateTime, default=datetime.utcnow, index=True)  # Индекс для сортировки
+    user_id = Column(Integer, nullable=False, index=True)  # Индекс для фильтрации
     username = Column(String, nullable=True)
-    action = Column(String, nullable=False)
+    action = Column(String, nullable=False, index=True)  # Индекс для фильтрации
     details = Column(Text, nullable=True)
+    
+    # Составной индекс для частых запросов
+    __table_args__ = (
+        Index('idx_log_user_action', 'user_id', 'action', 'timestamp'),
+    )
 
 # Создаем таблицы
 Base.metadata.create_all(bind=engine)
@@ -107,60 +125,90 @@ def format_record(record):
     return result.rstrip()  # Убираем последний перенос строки
 
 # Функции для работы с базой данных
-def get_db():
+@contextmanager
+def get_db_session():
+    """Контекстный менеджер для работы с сессией БД"""
     db = SessionLocal()
     try:
         yield db
+        db.commit()
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Ошибка в сессии БД: {e}")
+        raise
     finally:
         db.close()
 
 def load_database():
     """Загружает все записи из базы данных"""
     try:
-        db = SessionLocal()
-        persons = db.query(Person).all()
-        db.close()
-        return persons
+        with get_db_session() as db:
+            persons = db.query(Person).all()
+            return persons
     except Exception as e:
-        print(f"Ошибка загрузки базы данных: {e}")
+        logger.error(f"Ошибка загрузки базы данных: {e}")
         return []
 
 def save_person(person_data):
     """Сохраняет новую запись в базу данных"""
     try:
-        db = SessionLocal()
-        person = Person(**person_data)
-        db.add(person)
-        db.commit()
-        db.refresh(person)
-        db.close()
-        return person
+        with get_db_session() as db:
+            person = Person(**person_data)
+            db.add(person)
+            db.flush()  # Получаем ID без коммита
+            db.refresh(person)
+            return person
     except Exception as e:
-        print(f"Ошибка сохранения записи: {e}")
+        logger.error(f"Ошибка сохранения записи: {e}")
         return None
 
-def search_persons(query):
-    """Поиск записей по запросу"""
+def normalize_phone(phone):
+    """Нормализует телефон к формату 11 цифр"""
+    # Удаляем все нецифровые символы
+    digits = re.sub(r'\D', '', phone)
+    # Если начинается с 8, заменяем на 7
+    if len(digits) == 11 and digits.startswith('8'):
+        digits = '7' + digits[1:]
+    return digits
+
+def normalize_query(query):
+    """Нормализует поисковый запрос"""
+    # Удаляем лишние пробелы, приводим к нижнему регистру
+    return ' '.join(query.strip().lower().split())
+
+def search_persons(query, limit=100):
+    """Улучшенный поиск записей по запросу с нормализацией"""
     try:
-        db = SessionLocal()
-        persons = db.query(Person).filter(
-            Person.fio.contains(query) |
-            Person.phone.contains(query) |
-            Person.car_number.contains(query) |
-            Person.address.contains(query) |
-            Person.passport.contains(query)
-        ).all()
-        db.close()
-        return persons
+        # Нормализуем запрос
+        normalized_query = normalize_query(query)
+        
+        # Если запрос выглядит как телефон, нормализуем его
+        digits_only = re.sub(r'\D', '', query)
+        if len(digits_only) >= 7:  # Если есть достаточно цифр, возможно это телефон
+            normalized_query = normalize_phone(query)
+        
+        with get_db_session() as db:
+            # Используем ilike для регистронезависимого поиска
+            # Используем OR для поиска по всем полям
+            persons = db.query(Person).filter(
+                Person.fio.ilike(f'%{normalized_query}%') |
+                Person.phone.contains(normalized_query) |
+                Person.car_number.ilike(f'%{normalized_query}%') |
+                Person.address.ilike(f'%{normalized_query}%') |
+                Person.passport.contains(normalized_query)
+            ).limit(limit).all()
+            
+            return persons
     except Exception as e:
-        print(f"Ошибка поиска: {e}")
+        logger.error(f"Ошибка поиска: {e}")
         return []
 
 # Инициализация базы данных
 try:
     # Проверяем подключение к базе данных
-    db = SessionLocal()
-    db.close()
+    from sqlalchemy import text
+    with engine.connect() as conn:
+        conn.execute(text("SELECT 1"))
     logger.info("Подключение к базе данных успешно")
 except Exception as e:
     logger.error(f"Ошибка подключения к базе данных: {e}")
@@ -188,32 +236,29 @@ def log_user_action(user_id, username, action, details=""):
     
     # Записываем в базу данных
     try:
-        db = SessionLocal()
-        log_entry = UserLog(
-            user_id=user_id,
-            username=username,
-            action=action,
-            details=details
-        )
-        db.add(log_entry)
-        db.commit()
-        db.close()
+        with get_db_session() as db:
+            log_entry = UserLog(
+                user_id=user_id,
+                username=username,
+                action=action,
+                details=details
+            )
+            db.add(log_entry)
     except Exception as e:
         logger.error(f"Ошибка записи в базу данных: {e}")
 
 def get_user_logs(limit=10):
     """Получает последние логи пользователей"""
     try:
-        db = SessionLocal()
-        logs = db.query(UserLog).order_by(UserLog.timestamp.desc()).limit(limit).all()
-        db.close()
-        return [{
-            "timestamp": log.timestamp.strftime("%Y-%m-%d %H:%M:%S"),
-            "user_id": log.user_id,
-            "username": log.username,
-            "action": log.action,
-            "details": log.details
-        } for log in logs]
+        with get_db_session() as db:
+            logs = db.query(UserLog).order_by(UserLog.timestamp.desc()).limit(limit).all()
+            return [{
+                "timestamp": log.timestamp.strftime("%Y-%m-%d %H:%M:%S"),
+                "user_id": log.user_id,
+                "username": log.username,
+                "action": log.action,
+                "details": log.details
+            } for log in logs]
     except Exception as e:
         logger.error(f"Ошибка чтения логов: {e}")
         return []
@@ -221,16 +266,17 @@ def get_user_logs(limit=10):
 def get_failed_auth_logs(limit=10):
     """Получает только неудачные попытки авторизации"""
     try:
-        db = SessionLocal()
-        logs = db.query(UserLog).filter(UserLog.action == 'AUTH_FAILED').order_by(UserLog.timestamp.desc()).limit(limit).all()
-        db.close()
-        return [{
-            "timestamp": log.timestamp.strftime("%Y-%m-%d %H:%M:%S"),
-            "user_id": log.user_id,
-            "username": log.username,
-            "action": log.action,
-            "details": log.details
-        } for log in logs]
+        with get_db_session() as db:
+            logs = db.query(UserLog).filter(
+                UserLog.action == 'AUTH_FAILED'
+            ).order_by(UserLog.timestamp.desc()).limit(limit).all()
+            return [{
+                "timestamp": log.timestamp.strftime("%Y-%m-%d %H:%M:%S"),
+                "user_id": log.user_id,
+                "username": log.username,
+                "action": log.action,
+                "details": log.details
+            } for log in logs]
     except Exception as e:
         logger.error(f"Ошибка чтения логов: {e}")
         return []
@@ -381,19 +427,36 @@ async def process_search_query(message: types.Message, state: FSMContext):
         await message.answer("Введите непустой запрос")
         return
 
-    results = []
-    persons = search_persons(query)
-    for person in persons:
-        results.append(format_record(person))
-
-    if results:
-        log_user_action(user_id, username, "SEARCH_SUCCESS", f"Найдено {len(results)} результатов по запросу: {query}")
-        result_message = f"🔍 <b>Найдено результатов: {len(results)}</b>\n\n"
-        result_message += "\n\n".join(results)
-        await message.answer(result_message, parse_mode='HTML')
+    # Выполняем поиск с ограничением
+    persons = search_persons(query, limit=50)  # Ограничиваем результаты
+    
+    if persons:
+        log_user_action(user_id, username, "SEARCH_SUCCESS", f"Найдено {len(persons)} результатов по запросу: {query}")
+        
+        # Формируем сообщения с пагинацией (Telegram ограничение 4096 символов)
+        MAX_MESSAGE_LENGTH = 4000  # Оставляем запас
+        result_message = f"🔍 <b>Найдено результатов: {len(persons)}</b>\n\n"
+        
+        current_message = result_message
+        for i, person in enumerate(persons, 1):
+            person_text = f"<b>Результат {i}:</b>\n{format_record(person)}\n\n"
+            
+            # Если сообщение станет слишком длинным, отправляем текущее и начинаем новое
+            if len(current_message) + len(person_text) > MAX_MESSAGE_LENGTH:
+                await message.answer(current_message, parse_mode='HTML')
+                current_message = f"<b>Продолжение (результаты {i}-{len(persons)}):</b>\n\n{person_text}"
+            else:
+                current_message += person_text
+        
+        # Отправляем последнее сообщение
+        await message.answer(current_message, parse_mode='HTML')
     else:
         log_user_action(user_id, username, "SEARCH_NO_RESULTS", f"Ничего не найдено по запросу: {query}")
-        await message.answer("🔍 <b>Ничего не найдено</b>\n\n<i>Попробуйте изменить поисковый запрос</i>", parse_mode='HTML')
+        await message.answer(
+            "🔍 <b>Ничего не найдено</b>\n\n"
+            "<i>Попробуйте изменить поисковый запрос или использовать часть слова</i>",
+            parse_mode='HTML'
+        )
 
     # Завершаем состояние и возвращаем основную клавиатуру
     role = get_user_role(user_id)
@@ -445,9 +508,33 @@ async def process_fio(message: types.Message, state: FSMContext):
     
     fio = message.text.strip()
     
-    # Простая валидация ФИО (должно содержать минимум 2 слова)
-    if len(fio.split()) < 2:
-        await message.answer("❌ <b>Ошибка:</b> ФИО должно содержать минимум фамилию и имя.\n\n🔄 <i>Попробуйте еще раз:</i>", parse_mode='HTML')
+    # Улучшенная валидация ФИО
+    fio_parts = fio.split()
+    if len(fio_parts) < 2:
+        await message.answer(
+            "❌ <b>Ошибка:</b> ФИО должно содержать минимум фамилию и имя.\n\n"
+            "🔄 <i>Попробуйте еще раз:</i>",
+            parse_mode='HTML'
+        )
+        return
+    
+    # Проверка на допустимые символы (буквы, пробелы, дефисы)
+    if not re.match(r'^[а-яА-ЯёЁa-zA-Z\s\-]+$', fio):
+        await message.answer(
+            "❌ <b>Ошибка:</b> ФИО содержит недопустимые символы.\n\n"
+            "💡 <i>Используйте только буквы, пробелы и дефисы</i>\n\n"
+            "🔄 <i>Попробуйте еще раз:</i>",
+            parse_mode='HTML'
+        )
+        return
+    
+    # Проверка длины
+    if len(fio) > 200:
+        await message.answer(
+            "❌ <b>Ошибка:</b> ФИО слишком длинное (максимум 200 символов).\n\n"
+            "🔄 <i>Попробуйте еще раз:</i>",
+            parse_mode='HTML'
+        )
         return
     
     # Сохраняем ФИО во временные данные
@@ -475,21 +562,47 @@ async def process_phone(message: types.Message, state: FSMContext):
     
     phone = message.text.strip()
     
-    # Валидация телефона
-    if not phone.isdigit() or len(phone) != 11:
-        await message.answer("❌ <b>Ошибка:</b> Неверный формат телефона. Нужно 11 цифр (например: 79991234567)\n\n🔄 <i>Попробуйте еще раз:</i>", parse_mode='HTML')
+    # Валидация телефона (поддержка разных форматов)
+    digits_only = re.sub(r'\D', '', phone)
+    if len(digits_only) < 10 or len(digits_only) > 11:
+        await message.answer(
+            "❌ <b>Ошибка:</b> Неверный формат телефона.\n\n"
+            "📱 <i>Поддерживаемые форматы:</i>\n"
+            "• 79991234567\n"
+            "• 89991234567\n"
+            "• +7 999 123 45 67\n"
+            "• 8 (999) 123-45-67\n\n"
+            "🔄 <i>Попробуйте еще раз:</i>",
+            parse_mode='HTML'
+        )
+        return
+    
+    # Нормализуем телефон
+    normalized_phone = normalize_phone(phone)
+    if len(normalized_phone) != 11:
+        await message.answer(
+            "❌ <b>Ошибка:</b> Не удалось нормализовать телефон. Нужно 11 цифр.\n\n"
+            "🔄 <i>Попробуйте еще раз:</i>",
+            parse_mode='HTML'
+        )
         return
     
     # Проверяем, нет ли дубликатов
     try:
-        db = SessionLocal()
-        existing_person = db.query(Person).filter(Person.phone == phone).first()
-        db.close()
-        if existing_person:
-            await message.answer(f"❌ <b>Ошибка:</b> Запись с телефоном {phone} уже существует!\n\n🔄 <i>Попробуйте другой номер:</i>", parse_mode='HTML')
-            return
+        with get_db_session() as db:
+            existing_person = db.query(Person).filter(Person.phone == normalized_phone).first()
+            if existing_person:
+                await message.answer(
+                    f"❌ <b>Ошибка:</b> Запись с телефоном {normalized_phone} уже существует!\n\n"
+                    "🔄 <i>Попробуйте другой номер:</i>",
+                    parse_mode='HTML'
+                )
+                return
     except Exception as e:
         logger.error(f"Ошибка проверки дубликатов: {e}")
+    
+    # Сохраняем нормализованный телефон
+    phone = normalized_phone
     
     # Сохраняем телефон во временные данные
     user_temp_data[user_id]['phone'] = phone
@@ -516,15 +629,40 @@ async def process_birth(message: types.Message, state: FSMContext):
     
     birth = message.text.strip()
     
-    # Валидация даты
+    # Улучшенная валидация даты
     try:
-        year, month, day = birth.split('-')
-        if len(year) != 4 or len(month) != 2 or len(day) != 2:
-            raise ValueError
-        # Проверяем, что дата валидна
-        datetime.strptime(birth, '%Y-%m-%d')
-    except:
-        await message.answer("❌ <b>Ошибка:</b> Неверный формат даты. Используйте: YYYY-MM-DD (например: 1992-03-15)\n\n🔄 <i>Попробуйте еще раз:</i>", parse_mode='HTML')
+        # Проверка формата
+        if not re.match(r'^\d{4}-\d{2}-\d{2}$', birth):
+            raise ValueError("Неверный формат")
+        
+        # Парсинг даты
+        birth_date = datetime.strptime(birth, '%Y-%m-%d')
+        
+        # Проверка разумности даты
+        current_year = datetime.now().year
+        if birth_date.year > current_year:
+            await message.answer(
+                "❌ <b>Ошибка:</b> Дата не может быть в будущем.\n\n"
+                "🔄 <i>Попробуйте еще раз:</i>",
+                parse_mode='HTML'
+            )
+            return
+        
+        if birth_date.year < 1900:
+            await message.answer(
+                "❌ <b>Ошибка:</b> Дата слишком старая (минимум 1900 год).\n\n"
+                "🔄 <i>Попробуйте еще раз:</i>",
+                parse_mode='HTML'
+            )
+            return
+    except ValueError as e:
+        await message.answer(
+            "❌ <b>Ошибка:</b> Неверный формат даты.\n\n"
+            "📅 <i>Используйте формат: YYYY-MM-DD</i>\n"
+            "💡 <i>Пример: 1992-03-15</i>\n\n"
+            "🔄 <i>Попробуйте еще раз:</i>",
+            parse_mode='HTML'
+        )
         return
     
     # Сохраняем дату рождения во временные данные
@@ -783,19 +921,36 @@ async def find_cmd(message: types.Message):
         )
         return
 
-    results = []
-    persons = search_persons(query)
-    for person in persons:
-        results.append(format_record(person))
-
-    if results:
-        log_user_action(user_id, username, "SEARCH_SUCCESS", f"Найдено {len(results)} результатов по запросу: {query}")
-        result_message = f"🔍 <b>Найдено результатов: {len(results)}</b>\n\n"
-        result_message += "\n\n".join(results)
-        await message.answer(result_message, parse_mode='HTML')
+    # Выполняем поиск с ограничением
+    persons = search_persons(query, limit=50)  # Ограничиваем результаты
+    
+    if persons:
+        log_user_action(user_id, username, "SEARCH_SUCCESS", f"Найдено {len(persons)} результатов по запросу: {query}")
+        
+        # Формируем сообщения с пагинацией (Telegram ограничение 4096 символов)
+        MAX_MESSAGE_LENGTH = 4000  # Оставляем запас
+        result_message = f"🔍 <b>Найдено результатов: {len(persons)}</b>\n\n"
+        
+        current_message = result_message
+        for i, person in enumerate(persons, 1):
+            person_text = f"<b>Результат {i}:</b>\n{format_record(person)}\n\n"
+            
+            # Если сообщение станет слишком длинным, отправляем текущее и начинаем новое
+            if len(current_message) + len(person_text) > MAX_MESSAGE_LENGTH:
+                await message.answer(current_message, parse_mode='HTML')
+                current_message = f"<b>Продолжение (результаты {i}-{len(persons)}):</b>\n\n{person_text}"
+            else:
+                current_message += person_text
+        
+        # Отправляем последнее сообщение
+        await message.answer(current_message, parse_mode='HTML')
     else:
         log_user_action(user_id, username, "SEARCH_NO_RESULTS", f"Ничего не найдено по запросу: {query}")
-        await message.answer("🔍 <b>Ничего не найдено</b>\n\n<i>Попробуйте изменить поисковый запрос</i>", parse_mode='HTML')
+        await message.answer(
+            "🔍 <b>Ничего не найдено</b>\n\n"
+            "<i>Попробуйте изменить поисковый запрос или использовать часть слова</i>",
+            parse_mode='HTML'
+        )
 
 # Команда /add (теперь запускает пошаговый процесс)
 @dp.message_handler(commands=["add"])
