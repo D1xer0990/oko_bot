@@ -157,9 +157,10 @@ def save_person(person_data):
             db.add(person)
             db.flush()  # Получаем ID без коммита
             db.refresh(person)
+            logger.info(f"Запись успешно сохранена с ID: {person.id}")
             return person
     except Exception as e:
-        logger.error(f"Ошибка сохранения записи: {e}")
+        logger.error(f"Ошибка сохранения записи: {e}", exc_info=True)
         return None
 
 def normalize_phone(phone):
@@ -169,6 +170,9 @@ def normalize_phone(phone):
     # Если начинается с 8, заменяем на 7
     if len(digits) == 11 and digits.startswith('8'):
         digits = '7' + digits[1:]
+    # Если начинается с +7 или просто 7, но меньше 11 цифр, добавляем недостающие
+    if len(digits) == 10:
+        digits = '7' + digits
     return digits
 
 def normalize_query(query):
@@ -179,24 +183,30 @@ def normalize_query(query):
 def search_persons(query, limit=100):
     """Улучшенный поиск записей по запросу с нормализацией"""
     try:
-        # Нормализуем запрос
-        normalized_query = normalize_query(query)
-        
-        # Если запрос выглядит как телефон, нормализуем его
+        # Проверяем, является ли запрос телефоном (много цифр)
         digits_only = re.sub(r'\D', '', query)
-        if len(digits_only) >= 7:  # Если есть достаточно цифр, возможно это телефон
-            normalized_query = normalize_phone(query)
         
         with get_db_session() as db:
-            # Используем ilike для регистронезависимого поиска
-            # Используем OR для поиска по всем полям
-            persons = db.query(Person).filter(
-                Person.fio.ilike(f'%{normalized_query}%') |
-                Person.phone.contains(normalized_query) |
-                Person.car_number.ilike(f'%{normalized_query}%') |
-                Person.address.ilike(f'%{normalized_query}%') |
-                Person.passport.contains(normalized_query)
-            ).limit(limit).all()
+            if len(digits_only) >= 7:  # Если запрос содержит много цифр, ищем как телефон/паспорт
+                # Нормализуем телефон для поиска
+                normalized_phone = normalize_phone(query)
+                # Ищем по телефону и паспорту (оба могут содержать цифры)
+                persons = db.query(Person).filter(
+                    Person.phone.contains(normalized_phone) |
+                    Person.passport.contains(normalized_phone) |
+                    Person.phone.contains(query) |  # Также ищем по оригинальному запросу
+                    Person.passport.contains(query)
+                ).limit(limit).all()
+            else:
+                # Текстовый поиск по всем полям с регистронезависимым поиском
+                normalized_query = normalize_query(query)
+                persons = db.query(Person).filter(
+                    Person.fio.ilike(f'%{normalized_query}%') |
+                    Person.phone.contains(normalized_query) |
+                    Person.car_number.ilike(f'%{normalized_query}%') |
+                    Person.address.ilike(f'%{normalized_query}%') |
+                    Person.passport.contains(normalized_query)
+                ).limit(limit).all()
             
             return persons
     except Exception as e:
@@ -414,55 +424,70 @@ async def process_search_query(message: types.Message, state: FSMContext):
     user_id = message.from_user.id
     username = message.from_user.username or "Unknown"
 
-    # Отмена поиска через команду /start
-    if message.text == "/start":
-        role = get_user_role(user_id)
-        keyboard = get_admin_keyboard() if role == "admin" else get_main_keyboard()
-        await message.answer("Поиск отменён.", reply_markup=keyboard)
-        await state.finish()
-        return
+    try:
+        # Отмена поиска через команду /start
+        if message.text == "/start":
+            role = get_user_role(user_id)
+            keyboard = get_admin_keyboard() if role == "admin" else get_main_keyboard()
+            await message.answer("Поиск отменён.", reply_markup=keyboard)
+            await state.finish()
+            return
 
-    query = message.text.strip()
-    if not query:
-        await message.answer("Введите непустой запрос")
-        return
+        query = message.text.strip()
+        if not query:
+            await message.answer("Введите непустой запрос")
+            return
 
-    # Выполняем поиск с ограничением
-    persons = search_persons(query, limit=50)  # Ограничиваем результаты
-    
-    if persons:
-        log_user_action(user_id, username, "SEARCH_SUCCESS", f"Найдено {len(persons)} результатов по запросу: {query}")
+        logger.info(f"Поиск запроса от пользователя {user_id}: {query}")
+
+        # Выполняем поиск с ограничением
+        persons = search_persons(query, limit=50)  # Ограничиваем результаты
         
-        # Формируем сообщения с пагинацией (Telegram ограничение 4096 символов)
-        MAX_MESSAGE_LENGTH = 4000  # Оставляем запас
-        result_message = f"🔍 <b>Найдено результатов: {len(persons)}</b>\n\n"
+        logger.info(f"Найдено результатов: {len(persons) if persons else 0}")
         
-        current_message = result_message
-        for i, person in enumerate(persons, 1):
-            person_text = f"<b>Результат {i}:</b>\n{format_record(person)}\n\n"
+        if persons:
+            log_user_action(user_id, username, "SEARCH_SUCCESS", f"Найдено {len(persons)} результатов по запросу: {query}")
             
-            # Если сообщение станет слишком длинным, отправляем текущее и начинаем новое
-            if len(current_message) + len(person_text) > MAX_MESSAGE_LENGTH:
-                await message.answer(current_message, parse_mode='HTML')
-                current_message = f"<b>Продолжение (результаты {i}-{len(persons)}):</b>\n\n{person_text}"
-            else:
-                current_message += person_text
-        
-        # Отправляем последнее сообщение
-        await message.answer(current_message, parse_mode='HTML')
-    else:
-        log_user_action(user_id, username, "SEARCH_NO_RESULTS", f"Ничего не найдено по запросу: {query}")
+            # Формируем сообщения с пагинацией (Telegram ограничение 4096 символов)
+            MAX_MESSAGE_LENGTH = 4000  # Оставляем запас
+            result_message = f"🔍 <b>Найдено результатов: {len(persons)}</b>\n\n"
+            
+            current_message = result_message
+            for i, person in enumerate(persons, 1):
+                person_text = f"<b>Результат {i}:</b>\n{format_record(person)}\n\n"
+                
+                # Если сообщение станет слишком длинным, отправляем текущее и начинаем новое
+                if len(current_message) + len(person_text) > MAX_MESSAGE_LENGTH:
+                    await message.answer(current_message, parse_mode='HTML')
+                    current_message = f"<b>Продолжение (результаты {i}-{len(persons)}):</b>\n\n{person_text}"
+                else:
+                    current_message += person_text
+            
+            # Отправляем последнее сообщение
+            await message.answer(current_message, parse_mode='HTML')
+        else:
+            log_user_action(user_id, username, "SEARCH_NO_RESULTS", f"Ничего не найдено по запросу: {query}")
+            await message.answer(
+                "🔍 <b>Ничего не найдено</b>\n\n"
+                "<i>Попробуйте изменить поисковый запрос или использовать часть слова</i>",
+                parse_mode='HTML'
+            )
+    except Exception as e:
+        logger.error(f"Ошибка при обработке поискового запроса: {e}", exc_info=True)
         await message.answer(
-            "🔍 <b>Ничего не найдено</b>\n\n"
-            "<i>Попробуйте изменить поисковый запрос или использовать часть слова</i>",
+            "❌ <b>Произошла ошибка при поиске.</b>\n\n"
+            "Пожалуйста, попробуйте еще раз.",
             parse_mode='HTML'
         )
-
-    # Завершаем состояние и возвращаем основную клавиатуру
-    role = get_user_role(user_id)
-    keyboard = get_admin_keyboard() if role == "admin" else get_main_keyboard()
-    await state.finish()
-    await message.answer(" ", reply_markup=keyboard)
+    finally:
+        # Завершаем состояние и возвращаем основную клавиатуру
+        try:
+            role = get_user_role(user_id)
+            keyboard = get_admin_keyboard() if role == "admin" else get_main_keyboard()
+            await state.finish()
+            await message.answer(" ", reply_markup=keyboard)
+        except Exception as e:
+            logger.error(f"Ошибка при завершении состояния поиска: {e}")
 
 @dp.message_handler(lambda message: message.text == "➕ Добавить")
 async def add_button_handler(message: types.Message, state: FSMContext):
@@ -764,44 +789,76 @@ async def process_passport(message: types.Message, state: FSMContext):
 # Функция для завершения процесса добавления
 async def finish_add_process(message: types.Message, state: FSMContext, user_id: int, username: str):
     """Завершает процесс добавления записи"""
-    # Получаем данные пользователя
-    temp_data = user_temp_data.get(user_id, {})
-    
-    # Создаем новую запись
-    new_record = {
-        "fio": temp_data.get('fio', ''),
-        "phone": temp_data.get('phone', ''),
-        "birth": temp_data.get('birth', ''),
-        "car_number": temp_data.get('car_number', ''),
-        "address": temp_data.get('address', ''),
-        "passport": temp_data.get('passport', '')
-    }
-    
-    # Сохраняем в базу данных
-    saved_person = save_person(new_record)
-    if saved_person:
-        log_user_action(user_id, username, "ADD_SUCCESS", f"Добавлена запись: {new_record['fio']}, {new_record['phone']}, {new_record['birth']}")
+    try:
+        # Получаем данные пользователя
+        temp_data = user_temp_data.get(user_id, {})
         
-        # Формируем красивое сообщение с результатом
-        result_message = "🎉 <b>Запись успешно добавлена!</b>\n\n"
-        result_message += format_record(saved_person)
+        # Проверяем обязательные поля
+        if not temp_data.get('fio') or not temp_data.get('phone') or not temp_data.get('birth'):
+            log_user_action(user_id, username, "ADD_ERROR", "Отсутствуют обязательные поля")
+            await message.answer(
+                "❌ <b>Ошибка:</b> Отсутствуют обязательные данные.\n\n"
+                "Пожалуйста, начните добавление заново.",
+                parse_mode='HTML'
+            )
+            # Очищаем временные данные и состояние
+            if user_id in user_temp_data:
+                del user_temp_data[user_id]
+            await state.finish()
+            return
         
-        # Возвращаем основную клавиатуру
-        role = get_user_role(user_id)
-        if role == "admin":
-            keyboard = get_admin_keyboard()
+        # Создаем новую запись
+        new_record = {
+            "fio": temp_data.get('fio', ''),
+            "phone": temp_data.get('phone', ''),
+            "birth": temp_data.get('birth', ''),
+            "car_number": temp_data.get('car_number', '') or None,
+            "address": temp_data.get('address', '') or None,
+            "passport": temp_data.get('passport', '') or None
+        }
+        
+        logger.info(f"Попытка сохранения записи для пользователя {user_id}: {new_record}")
+        
+        # Сохраняем в базу данных
+        saved_person = save_person(new_record)
+        if saved_person:
+            log_user_action(user_id, username, "ADD_SUCCESS", f"Добавлена запись: {new_record['fio']}, {new_record['phone']}, {new_record['birth']}")
+            
+            # Формируем красивое сообщение с результатом
+            result_message = "🎉 <b>Запись успешно добавлена!</b>\n\n"
+            result_message += format_record(saved_person)
+            
+            # Возвращаем основную клавиатуру
+            role = get_user_role(user_id)
+            if role == "admin":
+                keyboard = get_admin_keyboard()
+            else:
+                keyboard = get_main_keyboard()
+            
+            await message.answer(result_message, reply_markup=keyboard, parse_mode='HTML')
         else:
-            keyboard = get_main_keyboard()
-        
-        await message.answer(result_message, reply_markup=keyboard, parse_mode='HTML')
-    else:
-        log_user_action(user_id, username, "ADD_ERROR", "Ошибка при сохранении данных")
-        await message.answer("❌ <b>Ошибка при сохранении данных.</b> Попробуйте еще раз.", parse_mode='HTML')
-    
-    # Очищаем временные данные и состояние
-    if user_id in user_temp_data:
-        del user_temp_data[user_id]
-    await state.finish()
+            log_user_action(user_id, username, "ADD_ERROR", "Ошибка при сохранении данных")
+            await message.answer(
+                "❌ <b>Ошибка при сохранении данных.</b>\n\n"
+                "Пожалуйста, попробуйте еще раз или обратитесь к администратору.",
+                parse_mode='HTML'
+            )
+    except Exception as e:
+        logger.error(f"Критическая ошибка при завершении добавления записи: {e}", exc_info=True)
+        log_user_action(user_id, username, "ADD_ERROR", f"Критическая ошибка: {str(e)}")
+        await message.answer(
+            "❌ <b>Произошла ошибка при сохранении данных.</b>\n\n"
+            "Пожалуйста, попробуйте еще раз.",
+            parse_mode='HTML'
+        )
+    finally:
+        # Очищаем временные данные и состояние
+        if user_id in user_temp_data:
+            del user_temp_data[user_id]
+        try:
+            await state.finish()
+        except:
+            pass
 
 # Функция для отмены процесса добавления
 async def cancel_add_process(message: types.Message, state: FSMContext, user_id: int, username: str):
