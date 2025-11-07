@@ -183,34 +183,52 @@ def normalize_query(query):
 def search_persons(query, limit=100):
     """Улучшенный поиск записей по запросу с нормализацией"""
     try:
+        query = query.strip()
+        if not query:
+            return []
+        
         # Проверяем, является ли запрос телефоном (много цифр)
         digits_only = re.sub(r'\D', '', query)
         
-        with get_db_session() as db:
-            if len(digits_only) >= 7:  # Если запрос содержит много цифр, ищем как телефон/паспорт
-                # Нормализуем телефон для поиска
+        db = SessionLocal()
+        try:
+            # Всегда ищем по всем полям, но для цифровых запросов также нормализуем
+            persons_query = db.query(Person)
+            
+            # Для цифровых запросов (>=7 цифр) - ищем по телефону и паспорту
+            if len(digits_only) >= 7:
                 normalized_phone = normalize_phone(query)
-                # Ищем по телефону и паспорту (оба могут содержать цифры)
-                persons = db.query(Person).filter(
+                logger.info(f"Поиск по телефону: оригинал='{query}', цифр={len(digits_only)}, нормализованный='{normalized_phone}'")
+                
+                # Ищем по нормализованному телефону, оригинальному запросу и цифрам
+                persons = persons_query.filter(
+                    Person.phone.contains(digits_only) |
                     Person.phone.contains(normalized_phone) |
-                    Person.passport.contains(normalized_phone) |
-                    Person.phone.contains(query) |  # Также ищем по оригинальному запросу
+                    Person.phone.contains(query) |
+                    Person.passport.contains(digits_only) |
                     Person.passport.contains(query)
                 ).limit(limit).all()
             else:
                 # Текстовый поиск по всем полям с регистронезависимым поиском
                 normalized_query = normalize_query(query)
-                persons = db.query(Person).filter(
+                logger.info(f"Текстовый поиск: оригинал='{query}', нормализованный='{normalized_query}'")
+                
+                persons = persons_query.filter(
                     Person.fio.ilike(f'%{normalized_query}%') |
                     Person.phone.contains(normalized_query) |
+                    Person.phone.contains(query) |
                     Person.car_number.ilike(f'%{normalized_query}%') |
                     Person.address.ilike(f'%{normalized_query}%') |
-                    Person.passport.contains(normalized_query)
+                    Person.passport.contains(normalized_query) |
+                    Person.passport.contains(query)
                 ).limit(limit).all()
             
+            logger.info(f"Найдено записей: {len(persons)}")
             return persons
+        finally:
+            db.close()
     except Exception as e:
-        logger.error(f"Ошибка поиска: {e}")
+        logger.error(f"Ошибка поиска: {e}", exc_info=True)
         return []
 
 # Инициализация базы данных
@@ -963,49 +981,61 @@ async def find_cmd(message: types.Message):
     user_id = message.from_user.id
     username = message.from_user.username or "Unknown"
     
-    if not is_authorized(user_id):
-        log_user_action(user_id, username, "FIND_COMMAND", "Попытка поиска без авторизации")
-        await message.answer("Доступ запрещен! Сначала введите код доступа через /start")
-        return
-    
-    query = message.get_args().strip()
-    if not query:
-        # Переводим в состояние ожидания запроса, если аргумент не указан
-        await SearchStates.waiting_for_query.set()
-        await message.answer(
-            "Используй: /find <запрос> или введите запрос ниже:",
-            parse_mode='HTML'
-        )
-        return
+    try:
+        if not is_authorized(user_id):
+            log_user_action(user_id, username, "FIND_COMMAND", "Попытка поиска без авторизации")
+            await message.answer("Доступ запрещен! Сначала введите код доступа через /start")
+            return
+        
+        query = message.get_args().strip()
+        if not query:
+            # Переводим в состояние ожидания запроса, если аргумент не указан
+            await SearchStates.waiting_for_query.set()
+            await message.answer(
+                "Используй: /find <запрос> или введите запрос ниже:",
+                parse_mode='HTML'
+            )
+            return
 
-    # Выполняем поиск с ограничением
-    persons = search_persons(query, limit=50)  # Ограничиваем результаты
-    
-    if persons:
-        log_user_action(user_id, username, "SEARCH_SUCCESS", f"Найдено {len(persons)} результатов по запросу: {query}")
+        logger.info(f"Команда /find от пользователя {user_id}: {query}")
+
+        # Выполняем поиск с ограничением
+        persons = search_persons(query, limit=50)  # Ограничиваем результаты
         
-        # Формируем сообщения с пагинацией (Telegram ограничение 4096 символов)
-        MAX_MESSAGE_LENGTH = 4000  # Оставляем запас
-        result_message = f"🔍 <b>Найдено результатов: {len(persons)}</b>\n\n"
+        logger.info(f"Результат поиска: найдено {len(persons) if persons else 0} записей")
         
-        current_message = result_message
-        for i, person in enumerate(persons, 1):
-            person_text = f"<b>Результат {i}:</b>\n{format_record(person)}\n\n"
+        if persons:
+            log_user_action(user_id, username, "SEARCH_SUCCESS", f"Найдено {len(persons)} результатов по запросу: {query}")
             
-            # Если сообщение станет слишком длинным, отправляем текущее и начинаем новое
-            if len(current_message) + len(person_text) > MAX_MESSAGE_LENGTH:
-                await message.answer(current_message, parse_mode='HTML')
-                current_message = f"<b>Продолжение (результаты {i}-{len(persons)}):</b>\n\n{person_text}"
-            else:
-                current_message += person_text
-        
-        # Отправляем последнее сообщение
-        await message.answer(current_message, parse_mode='HTML')
-    else:
-        log_user_action(user_id, username, "SEARCH_NO_RESULTS", f"Ничего не найдено по запросу: {query}")
+            # Формируем сообщения с пагинацией (Telegram ограничение 4096 символов)
+            MAX_MESSAGE_LENGTH = 4000  # Оставляем запас
+            result_message = f"🔍 <b>Найдено результатов: {len(persons)}</b>\n\n"
+            
+            current_message = result_message
+            for i, person in enumerate(persons, 1):
+                person_text = f"<b>Результат {i}:</b>\n{format_record(person)}\n\n"
+                
+                # Если сообщение станет слишком длинным, отправляем текущее и начинаем новое
+                if len(current_message) + len(person_text) > MAX_MESSAGE_LENGTH:
+                    await message.answer(current_message, parse_mode='HTML')
+                    current_message = f"<b>Продолжение (результаты {i}-{len(persons)}):</b>\n\n{person_text}"
+                else:
+                    current_message += person_text
+            
+            # Отправляем последнее сообщение
+            await message.answer(current_message, parse_mode='HTML')
+        else:
+            log_user_action(user_id, username, "SEARCH_NO_RESULTS", f"Ничего не найдено по запросу: {query}")
+            await message.answer(
+                "🔍 <b>Ничего не найдено</b>\n\n"
+                "<i>Попробуйте изменить поисковый запрос или использовать часть слова</i>",
+                parse_mode='HTML'
+            )
+    except Exception as e:
+        logger.error(f"Ошибка в команде /find: {e}", exc_info=True)
         await message.answer(
-            "🔍 <b>Ничего не найдено</b>\n\n"
-            "<i>Попробуйте изменить поисковый запрос или использовать часть слова</i>",
+            "❌ <b>Произошла ошибка при поиске.</b>\n\n"
+            "Пожалуйста, попробуйте еще раз.",
             parse_mode='HTML'
         )
 
